@@ -402,9 +402,8 @@ export default function App() {
 
       <div style={{
         background: '#1a1a1a',
-        padding: '8px 12px',
+        padding: '8px 12px 12px',
         flexShrink: 0,
-        marginTop: 'auto',
         borderRadius: '0 0 8px 8px'
       }}>
         <div style={{
