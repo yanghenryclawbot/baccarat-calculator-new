@@ -38,7 +38,6 @@ export default function App() {
   }, [counts, commission])
 
   const recommendations = useMemo(() => {
-    // 使用 1 凯莉 (100% Kelly)
     const kellyFraction = 1.0
     const bets = [results.banker, results.player, results.tie, results.bankerPair, results.playerPair, results.super6]
     
@@ -47,7 +46,8 @@ export default function App() {
       const lossProb = 1 - winProb
       
       let kellyPercent = 0
-      if (winProb > 0) {
+      // 只要 EV > 0 就计算 Kelly
+      if (winProb > 0 && bet.ev > 0) {
         const payout = bet.payout
         const b = payout - 1
         if (b > 0) {
@@ -57,8 +57,8 @@ export default function App() {
         }
       }
       
-      // 限制在 0-1 範圍
-      kellyPercent = Math.min(Math.max(kellyPercent, 0), 1)
+      // 确保不是负数
+      kellyPercent = Math.max(0, kellyPercent)
       
       const amount = Math.floor(kellyPercent * kellyFraction * capital)
       
@@ -168,15 +168,18 @@ export default function App() {
 
   return (
     <div style={{
-      width: '100%',
-      minHeight: '100dvh',
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      width: '100vw',
+      height: '100dvh',
       background: '#0a0a0a',
       color: '#fff',
       overflow: 'hidden',
       display: 'flex',
-      flexDirection: 'column',
-      paddingBottom: 'env(safe-area-inset-bottom)',
-      boxSizing: 'border-box'
+      flexDirection: 'column'
     }}>
       <div style={{
         display: 'flex',
@@ -312,11 +315,11 @@ export default function App() {
           <div
             key={bet.type}
             style={{
-              background: bet.amount > 0 
-                ? (bet.ev > 0.02 ? 'rgba(34,197,94,0.2)' : 'rgba(251,191,36,0.2)') 
+              background: bet.ev > 0 
+                ? (bet.amount > 0 ? 'rgba(34,197,94,0.3)' : 'rgba(34,197,94,0.1)') 
                 : 'rgba(100,100,100,0.2)',
-              border: `2px solid ${bet.amount > 0 
-                ? (bet.ev > 0.02 ? '#22c55e' : '#fbbf24') 
+              border: `2px solid ${bet.ev > 0 
+                ? (bet.amount > 0 ? '#22c55e' : '#166534') 
                 : '#444'}`,
               borderRadius: '8px',
               padding: '6px 4px',
@@ -326,24 +329,24 @@ export default function App() {
             <div style={{ 
               fontSize: '13px', 
               fontWeight: 'bold',
-              color: bet.ev > 0 ? '#22c55e' : bet.ev < 0 ? '#ef4444' : '#888'
+              color: bet.ev > 0 ? '#22c55e' : '#888'
             }}>
               {bet.label}
             </div>
             <div style={{
-              fontSize: '12px', 
-              fontWeight: '600',
+              fontSize: '14px', 
+              fontWeight: '700',
               marginTop: '2px',
-              color: bet.amount > 0 ? '#fff' : '#666'
+              color: bet.amount > 0 ? '#22c55e' : '#666'
             }}>
-              {bet.amount > 0 ? `💰${(bet.amount / 10000).toFixed(1)}萬` : '-'}
+              {bet.amount > 0 ? `💰${(bet.amount / 10000).toFixed(2)}萬` : (bet.ev > 0 ? '💰0萬' : '-')}
             </div>
             <div style={{ fontSize: '10px', color: '#888', marginTop: '1px' }}>
               {bet.probability < 0.01 ? '-' : `${(bet.probability * 100).toFixed(1)}%`}
             </div>
             <div style={{ 
               fontSize: '9px', 
-              color: bet.ev > 0 ? '#22c55e' : bet.ev < 0 ? '#ef4444' : '#888',
+              color: bet.ev > 0 ? '#22c55e' : '#888',
               marginTop: '1px'
             }}>
               EV:{bet.ev > 0 ? '+' : ''}{(bet.ev * 100).toFixed(2)}%
@@ -357,27 +360,31 @@ export default function App() {
         borderRadius: '8px',
         padding: '8px',
         margin: '0 12px 8px',
-        display: 'flex',
-        gap: '4px',
         overflowX: 'auto',
-        whiteSpace: 'nowrap',
+        overflowY: 'hidden',
         flexShrink: 0,
-        maxHeight: '50px'
+        maxWidth: 'calc(100vw - 24px)'
       }}>
-        {history.map((card, i) => (
-          <div key={i} style={{
-            background: card === '|' ? '#fbbf24' : '#555',
-            borderRadius: '4px',
-            padding: '4px 8px',
-            fontSize: '12px',
-            fontWeight: '700',
-            color: card === '|' ? '#000' : '#fff',
-            flexShrink: 0
-          }}>
-            {card === '|' ? '|' : CARD_LABELS.indexOf(card.replace('Banker', '').replace('Player', '')) + 1}
-          </div>
-        ))}
-        {history.length === 0 && <span style={{ color: '#555', fontSize: '12px' }}>No cards</span>}
+        <div style={{
+          display: 'flex',
+          gap: '4px',
+          whiteSpace: 'nowrap'
+        }}>
+          {history.map((card, i) => (
+            <div key={i} style={{
+              background: card === '|' ? '#fbbf24' : '#555',
+              borderRadius: '4px',
+              padding: '4px 8px',
+              fontSize: '12px',
+              fontWeight: '700',
+              color: card === '|' ? '#000' : '#fff',
+              flexShrink: 0
+            }}>
+              {card === '|' ? '|' : CARD_LABELS.indexOf(card.replace('Banker', '').replace('Player', '')) + 1}
+            </div>
+          ))}
+          {history.length === 0 && <span style={{ color: '#555', fontSize: '12px' }}>No cards</span>}
+        </div>
       </div>
 
       <div style={{
@@ -414,8 +421,7 @@ export default function App() {
         background: '#0a0a0a',
         padding: '8px 12px',
         flexShrink: 0,
-        marginTop: 'auto',
-        paddingBottom: 'max(8px, env(safe-area-inset-bottom))'
+        marginTop: 'auto'
       }}>
         <div style={{
           display: 'grid',
