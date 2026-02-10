@@ -374,7 +374,7 @@ export default function App() {
         background: '#1a1a1a',
         borderRadius: '8px',
         padding: '6px',
-        margin: '0 12px 8px',
+        margin: '0 12px 0px',
         display: 'grid',
         gridTemplateColumns: 'repeat(13, 1fr)',
         gap: '2px',
@@ -401,10 +401,11 @@ export default function App() {
       </div>
 
       <div style={{
-        background: '#0a0a0a',
+        background: '#1a1a1a',
         padding: '8px 12px',
         flexShrink: 0,
-        marginTop: 'auto'
+        marginTop: 'auto',
+        borderRadius: '0 0 8px 8px'
       }}>
         <div style={{
           display: 'grid',
