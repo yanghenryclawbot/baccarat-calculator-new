@@ -1,0 +1,555 @@
+import { useState, useMemo, useEffect } from 'react'
+import { calculateBaccaratEV } from './logic'
+import type { DeckCounts, Payouts } from './logic'
+
+const CARD_LABELS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']
+const INITIAL_DECK_COUNT = 32
+
+export default function App() {
+  const [showSettings, setShowSettings] = useState(false)
+  const [capital, setCapital] = useState(() => {
+    const saved = localStorage.getItem('baccarat-capital')
+    return saved ? parseInt(saved) : 10000000
+  })
+  const [commission, setCommission] = useState(() => {
+    const saved = localStorage.getItem('baccarat-commission')
+    return saved ? parseFloat(saved) : 2.0
+  })
+  const [isInputFocused, setIsInputFocused] = useState(false)
+  const [counts, setCounts] = useState<DeckCounts>(() => {
+    const initial: DeckCounts = {}
+    for (let i = 1; i <= 13; i++) {
+      initial[i] = INITIAL_DECK_COUNT
+    }
+    return initial
+  })
+  const [history, setHistory] = useState<string[]>([])
+
+  const results = useMemo(() => {
+    const payouts: Payouts = {
+      banker: 0.95,
+      player: 1.0,
+      tie: 8.0,
+      playerPair: 11.0,
+      bankerPair: 11.0,
+      super6: 12.0
+    }
+    return calculateBaccaratEV(counts, payouts, commission)
+  }, [counts, commission])
+
+  const recommendations = useMemo(() => {
+    const kellyFraction = 0.25
+    const bets = [results.banker, results.player, results.tie, results.bankerPair, results.playerPair, results.super6]
+    
+    return bets.map(bet => {
+      const winProb = bet.probability
+      const lossProb = 1 - winProb
+      
+      let kellyPercent = 0
+      if (winProb > 0 && bet.ev > 0) {
+        const payout = bet.payout
+        const b = payout - 1
+        if (b > 0) {
+          // 有賠率的情況 (莊/對子/和)
+          kellyPercent = (b * winProb - lossProb) / b
+        } else {
+          // 無賠率的情況 (閒) - 簡化凱莉
+          kellyPercent = winProb - lossProb
+        }
+      }
+      
+      // 確保凱莉百分比合理（不超過100%）
+      kellyPercent = Math.min(Math.max(kellyPercent, 0), 1)
+      
+      const amount = Math.floor(kellyPercent * kellyFraction * capital)
+      
+      return {
+        type: bet.label,
+        label: bet.label,
+        probability: winProb,
+        ev: bet.ev,
+        amount: amount,
+        shouldBet: amount > 0
+      }
+    }).sort((a, b) => b.amount - a.amount)
+  }, [results, capital])
+
+  const handleNumber = (value: number) => {
+    if (counts[value] <= 0) return
+    const realHistory = history.filter(h => h !== '|')
+    const side = realHistory.length % 2 === 0 ? 'Banker' : 'Player'
+    setHistory(prev => [`${side}${CARD_LABELS[value - 1]}`, ...prev])
+    setCounts(prev => ({
+      ...prev,
+      [value]: Math.max(0, prev[value] - 1)
+    }))
+  }
+
+  const handleSeparator = () => {
+    setHistory(prev => ['|', ...prev])
+  }
+
+  const handleClear = () => {
+    if (confirm('Clear all data?')) {
+      setHistory([])
+      setCounts(() => {
+        const initial: DeckCounts = {}
+        for (let i = 1; i <= 13; i++) {
+          initial[i] = INITIAL_DECK_COUNT
+        }
+        return initial
+      })
+    }
+  }
+
+  const handleBack = () => {
+    if (history.length === 0) return
+    // 新牌加在前面，所以最新的是 index 0
+    const first = history[0]
+    if (first === '|') {
+      setHistory(prev => prev.slice(1))
+      return
+    }
+    const label = first.replace('Banker', '').replace('Player', '')
+    const value = CARD_LABELS.indexOf(label) + 1
+    setCounts(prev => ({
+      ...prev,
+      [value]: Math.min(INITIAL_DECK_COUNT, prev[value] + 1)
+    }))
+    setHistory(prev => prev.slice(1))
+  }
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isInputFocused) return
+      
+      const numMap: Record<string, number> = {
+        '1': 1, '2': 2, '3': 3, '4': 4, '5': 5,
+        '6': 6, '7': 7, '8': 8, '9': 9
+      }
+      
+      if (numMap.hasOwnProperty(e.key)) {
+        e.preventDefault()
+        const val = numMap[e.key]
+        if (counts[val] > 0) handleNumber(val)
+      }
+      
+      if (e.key === '0') {
+        e.preventDefault()
+        if (counts[10] > 0) handleNumber(10)
+      }
+      
+      if (e.key === 'a' || e.key === 'A') {
+        e.preventDefault()
+        if (counts[1] > 0) handleNumber(1)
+      }
+      
+      if (e.key === 't' || e.key === 'T') {
+        e.preventDefault()
+        if (counts[10] > 0) handleNumber(10)
+      }
+      
+      const faceMap: Record<string, number> = {
+        'j': 11, 'J': 11, 'q': 12, 'Q': 12, 'k': 13, 'K': 13
+      }
+      if (faceMap.hasOwnProperty(e.key)) {
+        e.preventDefault()
+        const val = faceMap[e.key]
+        if (counts[val] > 0) handleNumber(val)
+      }
+      
+      if (e.key === ' ') {
+        e.preventDefault()
+        handleSeparator()
+      }
+    }
+    
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [history, counts])
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: '#0a0a0a',
+      color: '#fff',
+      padding: '12px'
+    }}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '16px'
+      }}>
+        <button
+          onClick={() => setShowSettings(!showSettings)}
+          style={{
+            background: '#333',
+            border: 'none',
+            borderRadius: '8px',
+            padding: '12px 16px',
+            color: '#fff',
+            fontSize: '18px',
+            cursor: 'pointer'
+          }}
+        >
+          ⚙️
+        </button>
+        <span style={{ color: '#22c55e', fontWeight: 'bold' }}>
+          {Object.values(counts).reduce((a, b) => a + b, 0)} cards
+        </span>
+        <button
+          onClick={handleSeparator}
+          style={{
+            background: '#3b82f6',
+            border: 'none',
+            borderRadius: '8px',
+            padding: '12px 16px',
+            color: '#fff',
+            fontSize: '18px',
+            fontWeight: 'bold',
+            cursor: 'pointer'
+          }}
+        >
+          |
+        </button>
+      </div>
+
+      {showSettings && (
+        <div style={{
+          background: '#1a1a1a',
+          borderRadius: '12px',
+          padding: '16px',
+          marginBottom: '16px',
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr 1fr',
+          gap: '12px'
+        }}>
+            <div>
+              <label style={{ display: 'block', color: '#888', fontSize: '12px', marginBottom: '6px' }}>Capital (萬)</label>
+              <input
+                type="number"
+                value={capital / 10000}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value) || 0
+                  const newCapital = val * 10000
+                  setCapital(newCapital)
+                  localStorage.setItem('baccarat-capital', newCapital.toString())
+                }}
+                onFocus={() => setIsInputFocused(true)}
+                onBlur={() => setIsInputFocused(false)}
+                style={{
+                  width: '100%',
+                  background: '#333',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '10px',
+                  color: '#fff',
+                  fontSize: '16px'
+                }}
+              />
+            </div>
+          <div>
+            <label style={{ display: 'block', color: '#888', fontSize: '12px', marginBottom: '6px' }}>Rebate %</label>
+            <input
+              type="number"
+              step="0.1"
+              value={commission}
+              onChange={(e) => {
+                const val = parseFloat(e.target.value) || 0
+                setCommission(val)
+                localStorage.setItem('baccarat-commission', val.toString())
+              }}
+              onFocus={() => setIsInputFocused(true)}
+              onBlur={() => setIsInputFocused(false)}
+              style={{
+                width: '100%',
+                background: '#333',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '10px',
+                color: '#fff',
+                fontSize: '16px'
+              }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', color: '#888', fontSize: '12px', marginBottom: '6px' }}>Action</label>
+            <button
+              onClick={handleClear}
+              style={{
+                width: '100%',
+                background: '#ef4444',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '10px',
+                color: '#fff',
+                fontSize: '14px',
+                cursor: 'pointer'
+              }}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gap: '8px',
+        marginBottom: '16px'
+      }}>
+        {recommendations.map(bet => (
+          <button
+            key={bet.type}
+            disabled={!bet.shouldBet}
+            style={{
+              background: bet.shouldBet 
+                ? (bet.ev > 0.02 ? 'rgba(34,197,94,0.2)' : 'rgba(251,191,36,0.2)') 
+                : 'rgba(100,100,100,0.2)',
+              border: `2px solid ${bet.shouldBet 
+                ? (bet.ev > 0.02 ? '#22c55e' : '#fbbf24') 
+                : '#444'}`,
+              borderRadius: '12px',
+              padding: '12px 8px',
+              color: '#fff',
+              cursor: bet.shouldBet ? 'pointer' : 'not-allowed',
+              opacity: bet.shouldBet ? 1 : 0.5
+            }}
+          >
+            <div style={{ 
+              fontSize: '16px', 
+              fontWeight: 'bold',
+              color: bet.ev > 0 ? '#22c55e' : bet.ev < 0 ? '#ef4444' : '#888'
+            }}>
+              {bet.label}
+            </div>
+            <div style={{
+          fontSize: '14px', 
+          fontWeight: '600',
+          marginTop: '4px'
+        }}>
+          {bet.amount > 0 ? bet.amount.toLocaleString() : '-'}
+        </div>
+        <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
+          {bet.probability < 0.01 ? '-' : `${(bet.probability * 100).toFixed(2)}%`}
+        </div>
+        <div style={{ 
+          fontSize: '11px', 
+          color: bet.ev > 0 ? '#22c55e' : bet.ev < 0 ? '#ef4444' : '#888',
+          marginTop: '2px'
+        }}>
+          EV: {bet.ev > 0 ? '+' : ''}{(bet.ev * 100).toFixed(4)}%
+        </div>
+      </button>
+    ))}
+      </div>
+
+      <div style={{
+        background: '#1a1a1a',
+        borderRadius: '12px',
+        padding: '12px',
+        marginBottom: '12px',
+        display: 'flex',
+        gap: '4px',
+        overflowX: 'auto',
+        whiteSpace: 'nowrap'
+      }}>
+        {history.map((card, i) => (
+          <div key={i} style={{
+            background: card === '|' ? '#fbbf24' : '#555',
+            borderRadius: '6px',
+            padding: '6px 10px',
+            fontSize: '14px',
+            fontWeight: '700',
+            color: card === '|' ? '#000' : '#fff',
+            flexShrink: 0
+          }}>
+            {card === '|' ? '|' : CARD_LABELS.indexOf(card.replace('Banker', '').replace('Player', '')) + 1}
+          </div>
+        ))}
+        {history.length === 0 && <span style={{ color: '#555', fontSize: '14px' }}>No cards</span>}
+      </div>
+
+      <div style={{
+        background: '#1a1a1a',
+        borderRadius: '12px',
+        padding: '12px',
+        marginBottom: '12px',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(13, 1fr)',
+        gap: '2px'
+      }}>
+        {Object.entries(counts).map(([rank, count]) => (
+          <div key={rank} style={{
+            background: '#333',
+            borderRadius: '4px',
+            padding: '4px 0',
+            textAlign: 'center',
+            opacity: count === 0 ? 0.3 : 1
+          }}>
+            <div style={{ fontSize: '10px', color: '#888' }}>{CARD_LABELS[parseInt(rank) - 1]}</div>
+            <div style={{ 
+              fontSize: '12px', 
+              fontWeight: '700', 
+              color: count < 8 ? '#ef4444' : '#22c55e' 
+            }}>
+              {count}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{
+        background: '#0a0a0a',
+        borderRadius: '16px 16px 0 0',
+        padding: '16px',
+        margin: '0 -12px -12px -12px'
+      }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: '8px'
+        }}>
+          {[7, 8, 9].map(num => (
+            <button
+              key={num}
+              onClick={() => handleNumber(num)}
+              disabled={counts[num] <= 0}
+              style={{
+                background: counts[num] <= 0 ? '#222' : '#333',
+                border: 'none',
+                borderRadius: '12px',
+                padding: '16px',
+                fontSize: '20px',
+                fontWeight: '600',
+                color: counts[num] <= 0 ? '#666' : '#fff',
+                cursor: counts[num] <= 0 ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {CARD_LABELS[num - 1]}
+            </button>
+          ))}
+          <button
+            onClick={() => handleNumber(11)}
+            disabled={counts[11] <= 0}
+            style={{
+              background: counts[11] <= 0 ? '#222' : '#333',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '16px',
+              fontSize: '18px',
+              color: counts[11] <= 0 ? '#666' : '#fff',
+              cursor: counts[11] <= 0 ? 'not-allowed' : 'pointer'
+            }}
+          >
+            J
+          </button>
+
+          {[4, 5, 6].map(num => (
+            <button
+              key={num}
+              onClick={() => handleNumber(num)}
+              disabled={counts[num] <= 0}
+              style={{
+                background: counts[num] <= 0 ? '#222' : '#333',
+                border: 'none',
+                borderRadius: '12px',
+                padding: '16px',
+                fontSize: '20px',
+                fontWeight: '600',
+                color: counts[num] <= 0 ? '#666' : '#fff',
+                cursor: counts[num] <= 0 ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {CARD_LABELS[num - 1]}
+            </button>
+          ))}
+          <button
+            onClick={() => handleNumber(12)}
+            disabled={counts[12] <= 0}
+            style={{
+              background: counts[12] <= 0 ? '#222' : '#333',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '16px',
+              fontSize: '18px',
+              color: counts[12] <= 0 ? '#666' : '#fff',
+              cursor: counts[12] <= 0 ? 'not-allowed' : 'pointer'
+            }}
+          >
+            Q
+          </button>
+
+          {[1, 2, 3].map(num => (
+            <button
+              key={num}
+              onClick={() => handleNumber(num)}
+              disabled={counts[num] <= 0}
+              style={{
+                background: counts[num] <= 0 ? '#222' : '#333',
+                border: 'none',
+                borderRadius: '12px',
+                padding: '16px',
+                fontSize: '20px',
+                fontWeight: '600',
+                color: counts[num] <= 0 ? '#666' : '#fff',
+                cursor: counts[num] <= 0 ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {CARD_LABELS[num - 1]}
+            </button>
+          ))}
+          <button
+            onClick={() => handleNumber(13)}
+            disabled={counts[13] <= 0}
+            style={{
+              background: counts[13] <= 0 ? '#222' : '#333',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '16px',
+              fontSize: '18px',
+              color: counts[13] <= 0 ? '#666' : '#fff',
+              cursor: counts[13] <= 0 ? 'not-allowed' : 'pointer'
+            }}
+          >
+            K
+          </button>
+
+          <button
+            onClick={() => handleNumber(10)}
+            disabled={counts[10] <= 0}
+            style={{
+              background: counts[10] <= 0 ? '#222' : '#333',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '16px',
+              fontSize: '18px',
+              color: counts[10] <= 0 ? '#666' : '#fff',
+              cursor: counts[10] <= 0 ? 'not-allowed' : 'pointer',
+              gridColumn: 'span 2'
+            }}
+          >
+            10
+          </button>
+
+          <button
+            onClick={handleBack}
+            style={{
+              background: '#f59e0b',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '16px',
+              fontSize: '16px',
+              color: '#000',
+              cursor: 'pointer'
+            }}
+          >
+            ⌫
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
