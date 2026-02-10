@@ -170,16 +170,20 @@ export default function App() {
 
   return (
     <div style={{
-      minHeight: '100vh',
+      width: '100vw',
+      height: '100vh',
       background: '#0a0a0a',
       color: '#fff',
-      padding: '12px'
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column'
     }}>
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '16px'
+        padding: '12px',
+        flexShrink: 0
       }}>
         <button
           onClick={() => setShowSettings(!showSettings)}
@@ -219,11 +223,12 @@ export default function App() {
         <div style={{
           background: '#1a1a1a',
           borderRadius: '12px',
-          padding: '16px',
-          marginBottom: '16px',
+          padding: '12px',
+          margin: '0 12px 12px',
           display: 'grid',
           gridTemplateColumns: '1fr 1fr 1fr',
-          gap: '12px'
+          gap: '8px',
+          flexShrink: 0
         }}>
             <div>
               <label style={{ display: 'block', color: '#888', fontSize: '12px', marginBottom: '6px' }}>Capital (萬)</label>
@@ -298,7 +303,8 @@ export default function App() {
         display: 'grid',
         gridTemplateColumns: 'repeat(3, 1fr)',
         gap: '8px',
-        marginBottom: '16px'
+        padding: '0 12px 12px',
+        flexShrink: 0
       }}>
         {recommendations.map(bet => (
           <button
@@ -350,11 +356,13 @@ export default function App() {
         background: '#1a1a1a',
         borderRadius: '12px',
         padding: '12px',
-        marginBottom: '12px',
+        margin: '0 12px 12px',
         display: 'flex',
         gap: '4px',
         overflowX: 'auto',
-        whiteSpace: 'nowrap'
+        whiteSpace: 'nowrap',
+        flexShrink: 0,
+        maxHeight: '60px'
       }}>
         {history.map((card, i) => (
           <div key={i} style={{
@@ -375,11 +383,12 @@ export default function App() {
       <div style={{
         background: '#1a1a1a',
         borderRadius: '12px',
-        padding: '12px',
-        marginBottom: '12px',
+        padding: '8px 12px',
+        margin: '0 12px 12px',
         display: 'grid',
         gridTemplateColumns: 'repeat(13, 1fr)',
-        gap: '2px'
+        gap: '2px',
+        flexShrink: 0
       }}>
         {Object.entries(counts).map(([rank, count]) => (
           <div key={rank} style={{
@@ -403,9 +412,9 @@ export default function App() {
 
       <div style={{
         background: '#0a0a0a',
-        borderRadius: '16px 16px 0 0',
-        padding: '16px',
-        margin: '0 -12px -12px -12px'
+        padding: '12px',
+        flexShrink: 0,
+        marginTop: 'auto'
       }}>
         <div style={{
           display: 'grid',
