@@ -38,7 +38,8 @@ export default function App() {
   }, [counts, commission])
 
   const recommendations = useMemo(() => {
-    const kellyFraction = 0.25
+    // 使用 1 凯莉 (100% Kelly)
+    const kellyFraction = 1.0
     const bets = [results.banker, results.player, results.tie, results.bankerPair, results.playerPair, results.super6]
     
     return bets.map(bet => {
@@ -46,19 +47,17 @@ export default function App() {
       const lossProb = 1 - winProb
       
       let kellyPercent = 0
-      if (winProb > 0 && bet.ev > 0) {
+      if (winProb > 0) {
         const payout = bet.payout
         const b = payout - 1
         if (b > 0) {
-          // 有賠率的情況 (莊/對子/和)
           kellyPercent = (b * winProb - lossProb) / b
         } else {
-          // 無賠率的情況 (閒) - 簡化凱莉
           kellyPercent = winProb - lossProb
         }
       }
       
-      // 確保凱莉百分比合理（不超過100%）
+      // 限制在 0-1 範圍
       kellyPercent = Math.min(Math.max(kellyPercent, 0), 1)
       
       const amount = Math.floor(kellyPercent * kellyFraction * capital)
@@ -69,7 +68,7 @@ export default function App() {
         probability: winProb,
         ev: bet.ev,
         amount: amount,
-        shouldBet: amount > 0
+        kellyPercent: kellyPercent
       }
     }).sort((a, b) => b.amount - a.amount)
   }, [results, capital])
@@ -104,7 +103,6 @@ export default function App() {
 
   const handleBack = () => {
     if (history.length === 0) return
-    // 新牌加在前面，所以最新的是 index 0
     const first = history[0]
     if (first === '|') {
       setHistory(prev => prev.slice(1))
@@ -170,19 +168,21 @@ export default function App() {
 
   return (
     <div style={{
-      width: '100vw',
-      height: '100vh',
+      width: '100%',
+      minHeight: '100dvh',
       background: '#0a0a0a',
       color: '#fff',
       overflow: 'hidden',
       display: 'flex',
-      flexDirection: 'column'
+      flexDirection: 'column',
+      paddingBottom: 'env(safe-area-inset-bottom)',
+      boxSizing: 'border-box'
     }}>
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: '12px',
+        padding: '8px 12px',
         flexShrink: 0
       }}>
         <button
@@ -191,15 +191,15 @@ export default function App() {
             background: '#333',
             border: 'none',
             borderRadius: '8px',
-            padding: '12px 16px',
+            padding: '10px 14px',
             color: '#fff',
-            fontSize: '18px',
+            fontSize: '16px',
             cursor: 'pointer'
           }}
         >
           ⚙️
         </button>
-        <span style={{ color: '#22c55e', fontWeight: 'bold' }}>
+        <span style={{ color: '#22c55e', fontWeight: 'bold', fontSize: '14px' }}>
           {Object.values(counts).reduce((a, b) => a + b, 0)} cards
         </span>
         <button
@@ -208,9 +208,9 @@ export default function App() {
             background: '#3b82f6',
             border: 'none',
             borderRadius: '8px',
-            padding: '12px 16px',
+            padding: '10px 14px',
             color: '#fff',
-            fontSize: '18px',
+            fontSize: '16px',
             fontWeight: 'bold',
             cursor: 'pointer'
           }}
@@ -222,40 +222,41 @@ export default function App() {
       {showSettings && (
         <div style={{
           background: '#1a1a1a',
-          borderRadius: '12px',
-          padding: '12px',
-          margin: '0 12px 12px',
+          borderRadius: '8px',
+          padding: '8px',
+          margin: '0 12px 8px',
           display: 'grid',
           gridTemplateColumns: '1fr 1fr 1fr',
-          gap: '8px',
+          gap: '6px',
           flexShrink: 0
         }}>
-            <div>
-              <label style={{ display: 'block', color: '#888', fontSize: '12px', marginBottom: '6px' }}>Capital (萬)</label>
-              <input
-                type="number"
-                value={capital / 10000}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value) || 0
-                  const newCapital = val * 10000
-                  setCapital(newCapital)
-                  localStorage.setItem('baccarat-capital', newCapital.toString())
-                }}
-                onFocus={() => setIsInputFocused(true)}
-                onBlur={() => setIsInputFocused(false)}
-                style={{
-                  width: '100%',
-                  background: '#333',
-                  border: 'none',
-                  borderRadius: '8px',
-                  padding: '10px',
-                  color: '#fff',
-                  fontSize: '16px'
-                }}
-              />
-            </div>
           <div>
-            <label style={{ display: 'block', color: '#888', fontSize: '12px', marginBottom: '6px' }}>Rebate %</label>
+            <label style={{ display: 'block', color: '#888', fontSize: '11px', marginBottom: '4px' }}>Capital (萬)</label>
+            <input
+              type="number"
+              value={capital / 10000}
+              onChange={(e) => {
+                const val = parseInt(e.target.value) || 0
+                const newCapital = val * 10000
+                setCapital(newCapital)
+                localStorage.setItem('baccarat-capital', newCapital.toString())
+              }}
+              onFocus={() => setIsInputFocused(true)}
+              onBlur={() => setIsInputFocused(false)}
+              style={{
+                width: '100%',
+                background: '#333',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '8px',
+                color: '#fff',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', color: '#888', fontSize: '11px', marginBottom: '4px' }}>Rebate %</label>
             <input
               type="number"
               step="0.1"
@@ -271,25 +272,26 @@ export default function App() {
                 width: '100%',
                 background: '#333',
                 border: 'none',
-                borderRadius: '8px',
-                padding: '10px',
+                borderRadius: '6px',
+                padding: '8px',
                 color: '#fff',
-                fontSize: '16px'
+                fontSize: '14px',
+                boxSizing: 'border-box'
               }}
             />
           </div>
           <div>
-            <label style={{ display: 'block', color: '#888', fontSize: '12px', marginBottom: '6px' }}>Action</label>
+            <label style={{ display: 'block', color: '#888', fontSize: '11px', marginBottom: '4px' }}>Action</label>
             <button
               onClick={handleClear}
               style={{
                 width: '100%',
                 background: '#ef4444',
                 border: 'none',
-                borderRadius: '8px',
-                padding: '10px',
+                borderRadius: '6px',
+                padding: '8px',
                 color: '#fff',
-                fontSize: '14px',
+                fontSize: '13px',
                 cursor: 'pointer'
               }}
             >
@@ -302,74 +304,72 @@ export default function App() {
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: '8px',
-        padding: '0 12px 12px',
+        gap: '6px',
+        padding: '0 12px 8px',
         flexShrink: 0
       }}>
         {recommendations.map(bet => (
-          <button
+          <div
             key={bet.type}
-            disabled={!bet.shouldBet}
             style={{
-              background: bet.shouldBet 
+              background: bet.amount > 0 
                 ? (bet.ev > 0.02 ? 'rgba(34,197,94,0.2)' : 'rgba(251,191,36,0.2)') 
                 : 'rgba(100,100,100,0.2)',
-              border: `2px solid ${bet.shouldBet 
+              border: `2px solid ${bet.amount > 0 
                 ? (bet.ev > 0.02 ? '#22c55e' : '#fbbf24') 
                 : '#444'}`,
-              borderRadius: '12px',
-              padding: '12px 8px',
-              color: '#fff',
-              cursor: bet.shouldBet ? 'pointer' : 'not-allowed',
-              opacity: bet.shouldBet ? 1 : 0.5
+              borderRadius: '8px',
+              padding: '6px 4px',
+              textAlign: 'center'
             }}
           >
             <div style={{ 
-              fontSize: '16px', 
+              fontSize: '13px', 
               fontWeight: 'bold',
               color: bet.ev > 0 ? '#22c55e' : bet.ev < 0 ? '#ef4444' : '#888'
             }}>
               {bet.label}
             </div>
             <div style={{
-          fontSize: '14px', 
-          fontWeight: '600',
-          marginTop: '4px'
-        }}>
-          {bet.amount > 0 ? bet.amount.toLocaleString() : '-'}
-        </div>
-        <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
-          {bet.probability < 0.01 ? '-' : `${(bet.probability * 100).toFixed(2)}%`}
-        </div>
-        <div style={{ 
-          fontSize: '11px', 
-          color: bet.ev > 0 ? '#22c55e' : bet.ev < 0 ? '#ef4444' : '#888',
-          marginTop: '2px'
-        }}>
-          EV: {bet.ev > 0 ? '+' : ''}{(bet.ev * 100).toFixed(4)}%
-        </div>
-      </button>
-    ))}
+              fontSize: '12px', 
+              fontWeight: '600',
+              marginTop: '2px',
+              color: bet.amount > 0 ? '#fff' : '#666'
+            }}>
+              {bet.amount > 0 ? `💰${(bet.amount / 10000).toFixed(1)}萬` : '-'}
+            </div>
+            <div style={{ fontSize: '10px', color: '#888', marginTop: '1px' }}>
+              {bet.probability < 0.01 ? '-' : `${(bet.probability * 100).toFixed(1)}%`}
+            </div>
+            <div style={{ 
+              fontSize: '9px', 
+              color: bet.ev > 0 ? '#22c55e' : bet.ev < 0 ? '#ef4444' : '#888',
+              marginTop: '1px'
+            }}>
+              EV:{bet.ev > 0 ? '+' : ''}{(bet.ev * 100).toFixed(2)}%
+            </div>
+          </div>
+        ))}
       </div>
 
       <div style={{
         background: '#1a1a1a',
-        borderRadius: '12px',
-        padding: '12px',
-        margin: '0 12px 12px',
+        borderRadius: '8px',
+        padding: '8px',
+        margin: '0 12px 8px',
         display: 'flex',
         gap: '4px',
         overflowX: 'auto',
         whiteSpace: 'nowrap',
         flexShrink: 0,
-        maxHeight: '60px'
+        maxHeight: '50px'
       }}>
         {history.map((card, i) => (
           <div key={i} style={{
             background: card === '|' ? '#fbbf24' : '#555',
-            borderRadius: '6px',
-            padding: '6px 10px',
-            fontSize: '14px',
+            borderRadius: '4px',
+            padding: '4px 8px',
+            fontSize: '12px',
             fontWeight: '700',
             color: card === '|' ? '#000' : '#fff',
             flexShrink: 0
@@ -377,14 +377,14 @@ export default function App() {
             {card === '|' ? '|' : CARD_LABELS.indexOf(card.replace('Banker', '').replace('Player', '')) + 1}
           </div>
         ))}
-        {history.length === 0 && <span style={{ color: '#555', fontSize: '14px' }}>No cards</span>}
+        {history.length === 0 && <span style={{ color: '#555', fontSize: '12px' }}>No cards</span>}
       </div>
 
       <div style={{
         background: '#1a1a1a',
-        borderRadius: '12px',
-        padding: '8px 12px',
-        margin: '0 12px 12px',
+        borderRadius: '8px',
+        padding: '6px',
+        margin: '0 12px 8px',
         display: 'grid',
         gridTemplateColumns: 'repeat(13, 1fr)',
         gap: '2px',
@@ -394,13 +394,13 @@ export default function App() {
           <div key={rank} style={{
             background: '#333',
             borderRadius: '4px',
-            padding: '4px 0',
+            padding: '3px 0',
             textAlign: 'center',
             opacity: count === 0 ? 0.3 : 1
           }}>
-            <div style={{ fontSize: '10px', color: '#888' }}>{CARD_LABELS[parseInt(rank) - 1]}</div>
+            <div style={{ fontSize: '9px', color: '#888' }}>{CARD_LABELS[parseInt(rank) - 1]}</div>
             <div style={{ 
-              fontSize: '12px', 
+              fontSize: '10px', 
               fontWeight: '700', 
               color: count < 8 ? '#ef4444' : '#22c55e' 
             }}>
@@ -412,14 +412,15 @@ export default function App() {
 
       <div style={{
         background: '#0a0a0a',
-        padding: '12px',
+        padding: '8px 12px',
         flexShrink: 0,
-        marginTop: 'auto'
+        marginTop: 'auto',
+        paddingBottom: 'max(8px, env(safe-area-inset-bottom))'
       }}>
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: '8px'
+          gap: '6px'
         }}>
           {[7, 8, 9].map(num => (
             <button
@@ -429,9 +430,9 @@ export default function App() {
               style={{
                 background: counts[num] <= 0 ? '#222' : '#333',
                 border: 'none',
-                borderRadius: '12px',
-                padding: '16px',
-                fontSize: '20px',
+                borderRadius: '8px',
+                padding: '12px 4px',
+                fontSize: '18px',
                 fontWeight: '600',
                 color: counts[num] <= 0 ? '#666' : '#fff',
                 cursor: counts[num] <= 0 ? 'not-allowed' : 'pointer'
@@ -446,9 +447,9 @@ export default function App() {
             style={{
               background: counts[11] <= 0 ? '#222' : '#333',
               border: 'none',
-              borderRadius: '12px',
-              padding: '16px',
-              fontSize: '18px',
+              borderRadius: '8px',
+              padding: '12px 4px',
+              fontSize: '16px',
               color: counts[11] <= 0 ? '#666' : '#fff',
               cursor: counts[11] <= 0 ? 'not-allowed' : 'pointer'
             }}
@@ -464,9 +465,9 @@ export default function App() {
               style={{
                 background: counts[num] <= 0 ? '#222' : '#333',
                 border: 'none',
-                borderRadius: '12px',
-                padding: '16px',
-                fontSize: '20px',
+                borderRadius: '8px',
+                padding: '12px 4px',
+                fontSize: '18px',
                 fontWeight: '600',
                 color: counts[num] <= 0 ? '#666' : '#fff',
                 cursor: counts[num] <= 0 ? 'not-allowed' : 'pointer'
@@ -481,9 +482,9 @@ export default function App() {
             style={{
               background: counts[12] <= 0 ? '#222' : '#333',
               border: 'none',
-              borderRadius: '12px',
-              padding: '16px',
-              fontSize: '18px',
+              borderRadius: '8px',
+              padding: '12px 4px',
+              fontSize: '16px',
               color: counts[12] <= 0 ? '#666' : '#fff',
               cursor: counts[12] <= 0 ? 'not-allowed' : 'pointer'
             }}
@@ -499,9 +500,9 @@ export default function App() {
               style={{
                 background: counts[num] <= 0 ? '#222' : '#333',
                 border: 'none',
-                borderRadius: '12px',
-                padding: '16px',
-                fontSize: '20px',
+                borderRadius: '8px',
+                padding: '12px 4px',
+                fontSize: '18px',
                 fontWeight: '600',
                 color: counts[num] <= 0 ? '#666' : '#fff',
                 cursor: counts[num] <= 0 ? 'not-allowed' : 'pointer'
@@ -516,9 +517,9 @@ export default function App() {
             style={{
               background: counts[13] <= 0 ? '#222' : '#333',
               border: 'none',
-              borderRadius: '12px',
-              padding: '16px',
-              fontSize: '18px',
+              borderRadius: '8px',
+              padding: '12px 4px',
+              fontSize: '16px',
               color: counts[13] <= 0 ? '#666' : '#fff',
               cursor: counts[13] <= 0 ? 'not-allowed' : 'pointer'
             }}
@@ -532,9 +533,9 @@ export default function App() {
             style={{
               background: counts[10] <= 0 ? '#222' : '#333',
               border: 'none',
-              borderRadius: '12px',
-              padding: '16px',
-              fontSize: '18px',
+              borderRadius: '8px',
+              padding: '12px 4px',
+              fontSize: '16px',
               color: counts[10] <= 0 ? '#666' : '#fff',
               cursor: counts[10] <= 0 ? 'not-allowed' : 'pointer',
               gridColumn: 'span 2'
@@ -548,9 +549,9 @@ export default function App() {
             style={{
               background: '#f59e0b',
               border: 'none',
-              borderRadius: '12px',
-              padding: '16px',
-              fontSize: '16px',
+              borderRadius: '8px',
+              padding: '12px 4px',
+              fontSize: '14px',
               color: '#000',
               cursor: 'pointer'
             }}
