@@ -38,37 +38,22 @@ export default function App() {
   }, [counts, commission])
 
   const recommendations = useMemo(() => {
-    const kellyFraction = 1.0
     const bets = [results.banker, results.player, results.tie, results.bankerPair, results.playerPair, results.super6]
     
     return bets.map(bet => {
-      const winProb = bet.probability
-      const lossProb = 1 - winProb
-      
-      let kellyPercent = 0
-      // 只要 EV > 0 就计算 Kelly
-      if (winProb > 0 && bet.ev > 0) {
-        const payout = bet.payout
-        const b = payout - 1
-        if (b > 0) {
-          kellyPercent = (b * winProb - lossProb) / b
-        } else {
-          kellyPercent = winProb - lossProb
-        }
+      // 公式：本金 * EV / 赔率
+      let amount = 0
+      if (bet.ev > 0 && bet.payout > 0) {
+        amount = Math.floor(capital * bet.ev / bet.payout)
       }
-      
-      // 确保不是负数
-      kellyPercent = Math.max(0, kellyPercent)
-      
-      const amount = Math.floor(kellyPercent * kellyFraction * capital)
       
       return {
         type: bet.label,
         label: bet.label,
-        probability: winProb,
+        probability: bet.probability,
         ev: bet.ev,
         amount: amount,
-        kellyPercent: kellyPercent
+        payout: bet.payout
       }
     }).sort((a, b) => b.amount - a.amount)
   }, [results, capital])
@@ -89,16 +74,14 @@ export default function App() {
   }
 
   const handleClear = () => {
-    if (confirm('Clear all data?')) {
-      setHistory([])
-      setCounts(() => {
-        const initial: DeckCounts = {}
-        for (let i = 1; i <= 13; i++) {
-          initial[i] = INITIAL_DECK_COUNT
-        }
-        return initial
-      })
-    }
+    setHistory([])
+    setCounts(() => {
+      const initial: DeckCounts = {}
+      for (let i = 1; i <= 13; i++) {
+        initial[i] = INITIAL_DECK_COUNT
+      }
+      return initial
+    })
   }
 
   const handleBack = () => {
@@ -339,7 +322,7 @@ export default function App() {
               marginTop: '2px',
               color: bet.amount > 0 ? '#22c55e' : '#666'
             }}>
-              {bet.amount > 0 ? `💰${(bet.amount / 10000).toFixed(2)}萬` : (bet.ev > 0 ? '💰0萬' : '-')}
+              {bet.amount > 0 ? bet.amount.toLocaleString() : (bet.ev > 0 ? '0' : '-')}
             </div>
             <div style={{ fontSize: '10px', color: '#888', marginTop: '1px' }}>
               {bet.probability < 0.01 ? '-' : `${(bet.probability * 100).toFixed(1)}%`}
